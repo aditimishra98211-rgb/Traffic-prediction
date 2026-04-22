@@ -1,0 +1,564 @@
+{% extends 'base.html' %}
+{% block title %}Smart Traffic AI — Predict{% endblock %}
+
+{% block head %}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800;900&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<style>
+/* ── Font override ────────────────────────────────────────── */
+body, .form-control, .form-label, select, input, button {
+  font-family: 'DM Sans', sans-serif !important;
+}
+.hero-title, .form-section-title, .map-title, .res-level,
+h1, h2, h3, .font-d, [class*="font-d"] {
+  font-family: 'Syne', sans-serif !important;
+}
+
+/* ── Hero ─────────────────────────────────────────────────── */
+.hero {
+  text-align: center;
+  padding: 4rem 0 2.5rem;
+}
+.hero-eyebrow {
+  font-size: .72rem; letter-spacing: 5px; text-transform: uppercase;
+  color: var(--cyan); font-weight: 700; margin-bottom: 1.1rem;
+  font-family: 'DM Sans', sans-serif;
+}
+.hero-title {
+  font-family: 'Syne', sans-serif !important;
+  font-size: clamp(2.4rem, 6.5vw, 4rem);
+  font-weight: 900; line-height: 1.06; margin-bottom: 1rem;
+  background: linear-gradient(140deg, #ffffff 30%, var(--cyan) 100%);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  background-clip: text; letter-spacing: -1px;
+}
+.hero-sub {
+  font-size: 1.05rem; color: var(--muted); font-weight: 400;
+  max-width: 500px; margin: 0 auto 1.8rem; line-height: 1.7;
+  font-family: 'DM Sans', sans-serif;
+}
+
+/* ── Feature pills ────────────────────────────────────────── */
+.pill-row {
+  display: flex; justify-content: center; flex-wrap: wrap; gap: 10px;
+  margin-bottom: 2rem;
+}
+.pill {
+  background: rgba(0,210,255,.06); border: 1px solid var(--border);
+  border-radius: 50px; padding: 6px 16px;
+  font-size: .78rem; font-weight: 600; color: var(--muted);
+  display: flex; align-items: center; gap: 6px;
+  font-family: 'DM Sans', sans-serif; letter-spacing: .3px;
+}
+.pill .dot {
+  width:7px; height:7px; border-radius:50%; background:var(--cyan);
+  box-shadow:0 0 6px var(--cyan);
+}
+
+/* ── Main grid ────────────────────────────────────────────── */
+.predict-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+  align-items: start;
+  margin-bottom: 2rem;
+}
+
+/* ── Form card ────────────────────────────────────────────── */
+.form-card { padding: 2rem 1.8rem; }
+.form-section-title {
+  font-family: 'Syne', sans-serif !important;
+  font-size: .72rem; letter-spacing: 3.5px;
+  color: var(--cyan); text-transform: uppercase; margin-bottom: 1.4rem;
+  font-weight: 700;
+}
+.form-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;
+  margin-bottom: 1.4rem;
+}
+.full { grid-column: 1 / -1; }
+
+/* Form labels */
+.form-label {
+  font-family: 'DM Sans', sans-serif !important;
+  font-size: .8rem; font-weight: 600; letter-spacing: .4px;
+  color: var(--muted); margin-bottom: 6px; display: block;
+}
+
+/* Form controls */
+.form-control {
+  font-family: 'DM Sans', sans-serif !important;
+  font-size: .9rem !important; font-weight: 400;
+  letter-spacing: .2px;
+}
+select.form-control option {
+  font-family: 'DM Sans', sans-serif;
+  font-size: .9rem;
+}
+
+/* Time slider */
+.time-value {
+  font-family: 'Syne', sans-serif !important;
+  font-size: 1.25rem; font-weight: 800;
+  color: var(--cyan); text-align: center; letter-spacing: 2px; margin-top: 7px;
+}
+input[type="range"] {
+  width: 100%; appearance: none; height: 4px;
+  background: rgba(0,210,255,.18); border-radius: 2px; outline: none; cursor: pointer;
+}
+input[type="range"]::-webkit-slider-thumb {
+  appearance: none; width: 18px; height: 18px;
+  background: var(--cyan); border-radius: 50%; cursor: pointer;
+  box-shadow: 0 0 10px rgba(0,210,255,.65);
+  transition: transform .18s;
+}
+input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.25); }
+
+/* Submit btn */
+.submit-wrap { position: relative; }
+.btn-predict {
+  width: 100%; padding: 14px;
+  font-family: 'Syne', sans-serif !important;
+  font-size: .82rem; letter-spacing: 2.5px; font-weight: 700;
+  position: relative;
+}
+.btn-predict .ld {
+  position: absolute;
+  width: 20px; height: 20px;
+  border: 2px solid rgba(4,8,15,.3); border-top-color: #04080f;
+  border-radius: 50%; animation: spin .7s linear infinite;
+  opacity: 0; transition: opacity .2s;
+}
+.btn-predict.loading .btn-text { opacity: 0; }
+.btn-predict.loading .ld { opacity: 1; }
+.btn-predict.loading { pointer-events: none; }
+.btn-text { transition: opacity .2s; }
+
+/* ── Result card ──────────────────────────────────────────── */
+.result-card {
+  padding: 2rem 1.8rem;
+  min-height: 440px;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 1.3rem; text-align: center;
+  transition: border-color .6s, box-shadow .6s;
+}
+.result-card.res-low    { border-color: rgba(0,255,136,.38);  box-shadow: 0 0 40px rgba(0,255,136,.09); }
+.result-card.res-medium { border-color: rgba(255,183,0,.38);  box-shadow: 0 0 40px rgba(255,183,0,.09); }
+.result-card.res-high   { border-color: rgba(255,51,102,.38); box-shadow: 0 0 42px rgba(255,51,102,.11); }
+
+/* Idle */
+.idle { display:flex; flex-direction:column; align-items:center; gap:14px; opacity:.45; }
+.idle-icon { font-size: 3.5rem; animation: float 3.2s ease-in-out infinite; }
+@keyframes float { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-10px)} }
+.idle-text {
+  font-size: 1rem; font-weight: 500; color: var(--muted);
+  font-family: 'DM Sans', sans-serif; line-height: 1.6;
+}
+
+/* Traffic light SVG */
+.tl-body   { fill: #081526; }
+.tl-border { fill: none; stroke: rgba(0,210,255,.28); stroke-width: 2; }
+.tl-circle { transition: fill .55s, filter .55s; }
+.tl-r { fill: #1f0810; }
+.tl-y { fill: #1f1400; }
+.tl-g { fill: #00160d; }
+.tl-r.on { fill: var(--red);   filter: drop-shadow(0 0 14px var(--red)); }
+.tl-y.on { fill: var(--amber); filter: drop-shadow(0 0 14px var(--amber)); }
+.tl-g.on { fill: var(--green); filter: drop-shadow(0 0 14px var(--green)); }
+
+/* Result text */
+.res-level {
+  font-family: 'Syne', sans-serif !important;
+  font-size: 1.85rem; font-weight: 900; letter-spacing: 3px;
+}
+.res-conf {
+  font-size: .83rem; color: var(--muted); font-weight: 500; margin-top: 4px;
+  font-family: 'DM Sans', sans-serif; letter-spacing: .3px;
+}
+
+/* Prob bars */
+.prob-block { width: 100%; }
+.prob-row { margin-bottom: 10px; }
+.prob-label-row {
+  display: flex; justify-content: space-between;
+  font-size: .8rem; font-weight: 600; color: var(--muted); margin-bottom: 5px;
+  font-family: 'DM Sans', sans-serif;
+}
+.bar-track {
+  height: 6px; background: rgba(255,255,255,.06);
+  border-radius: 3px; overflow: hidden;
+}
+.bar-fill {
+  height: 100%; border-radius: 3px; width: 0%;
+  transition: width .9s cubic-bezier(.34,1.56,.64,1);
+}
+.bar-g { background: var(--green); box-shadow: 0 0 8px rgba(0,255,136,.5); }
+.bar-a { background: var(--amber); box-shadow: 0 0 8px rgba(255,183,0,.5); }
+.bar-r { background: var(--red);   box-shadow: 0 0 8px rgba(255,51,102,.5); }
+
+/* Recommendation */
+.rec-box {
+  background: rgba(255,255,255,.03); border-radius: 8px;
+  border-left: 3px solid rgba(0,210,255,.35);
+  padding: 12px 15px; text-align: left;
+  font-size: .88rem; font-weight: 400; color: var(--muted); line-height: 1.65;
+  width: 100%; font-family: 'DM Sans', sans-serif;
+}
+
+/* ── Map section ──────────────────────────────────────────── */
+.map-section { margin: 1.5rem 0 3rem; }
+.map-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: .9rem;
+}
+.map-title {
+  font-family: 'Syne', sans-serif !important;
+  font-size: .78rem; letter-spacing: 2.5px; color: var(--cyan); font-weight: 700;
+}
+#map {
+  width: 100%; height: 400px;
+  border-radius: var(--radius); border: 1px solid var(--border); overflow: hidden;
+}
+.leaflet-popup-content-wrapper {
+  background: var(--bg3) !important; color: var(--text) !important;
+  border: 1px solid var(--border) !important; border-radius: 8px !important;
+  box-shadow: var(--glow) !important; font-family: 'DM Sans', sans-serif !important;
+}
+.leaflet-popup-tip { background: var(--bg3) !important; }
+
+/* ── Toast ────────────────────────────────────────────────── */
+.toast {
+  position: fixed; bottom: 24px; right: 24px;
+  padding: 12px 20px; border-radius: 8px;
+  font-size: .88rem; font-weight: 600; color: #04080f;
+  z-index: 9999; font-family: 'DM Sans', sans-serif;
+  animation: toastIn .3s ease, toastOut .3s ease 2.2s forwards;
+  box-shadow: 0 4px 20px rgba(0,0,0,.4);
+  max-width: 300px; line-height: 1.4;
+}
+@keyframes toastIn  { from { opacity:0; transform:translateY(12px) } to { opacity:1; transform:translateY(0) } }
+@keyframes toastOut { from { opacity:1 } to { opacity:0; pointer-events:none } }
+
+/* ── Responsive ───────────────────────────────────────────── */
+@media (max-width: 820px) {
+  .predict-grid { grid-template-columns: 1fr; }
+  .form-grid { grid-template-columns: 1fr; }
+  .hero { padding: 2.5rem 0 1.5rem; }
+  .result-card { min-height: 320px; }
+  #map { height: 300px; }
+  .hero-title { letter-spacing: -0.5px; }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-wrap">
+
+  <!-- Hero -->
+  <section class="hero">
+    <p class="hero-eyebrow">● Real-Time Urban Mobility Intelligence</p>
+    <h1 class="hero-title">Predict Traffic.<br>Drive Smarter.</h1>
+    <p class="hero-sub">
+      ML-powered traffic forecasting using 6,000 training samples.<br>
+      Enter conditions below and get an instant AI prediction.
+    </p>
+    <div class="pill-row">
+      <div class="pill"><div class="dot"></div> 94.2% Accuracy</div>
+      <div class="pill"><div class="dot"></div> Random Forest</div>
+      <div class="pill"><div class="dot"></div> 5 Feature Inputs</div>
+      <div class="pill"><div class="dot"></div> Live Map View</div>
+      <div class="pill"><div class="dot"></div> Instant Results</div>
+    </div>
+  </section>
+
+  <!-- Predict Grid -->
+  <div class="predict-grid">
+
+    <!-- Form Card -->
+    <div class="card form-card">
+      <p class="form-section-title">● Traffic Parameters</p>
+      <form id="predictForm">
+
+        <div class="form-grid">
+
+          <!-- Time slider -->
+          <div class="form-group full">
+            <label class="form-label">Time of Day</label>
+            <input type="range" id="timeSlider" name="time" min="0" max="23" value="8">
+            <div class="time-value" id="timeVal">08:00 &nbsp;(8 AM)</div>
+          </div>
+
+          <!-- Day -->
+          <div class="form-group">
+            <label class="form-label">Day of Week</label>
+            <select class="form-control" name="day" required>
+              <option value="" disabled selected>Select day</option>
+              {% for d in ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'] %}
+              <option value="{{ d }}">{{ d }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <!-- Vehicles -->
+          <div class="form-group">
+            <label class="form-label">Vehicle Count</label>
+            <input type="number" class="form-control" name="vehicles"
+                   placeholder="e.g. 150" min="1" max="500" required>
+          </div>
+
+          <!-- Weather -->
+          <div class="form-group">
+            <label class="form-label">Weather</label>
+            <select class="form-control" name="weather" required>
+              <option value="" disabled selected>Select weather</option>
+              <option value="Sunny">Sunny</option>
+              <option value="Cloudy">Cloudy</option>
+              <option value="Rainy">Rainy</option>
+              <option value="Foggy">Foggy</option>
+            </select>
+          </div>
+
+          <!-- Road type -->
+          <div class="form-group">
+            <label class="form-label">Road Type</label>
+            <select class="form-control" name="road_type" required>
+              <option value="" disabled selected>Select road</option>
+              <option value="Highway">Highway</option>
+              <option value="City Road">City Road</option>
+              <option value="Residential">Residential</option>
+            </select>
+          </div>
+
+          <!-- City -->
+          <div class="form-group full">
+            <label class="form-label">City / Location</label>
+            <input type="text" class="form-control" id="cityInput"
+                   placeholder="e.g. Mumbai, Delhi, Bangalore…">
+          </div>
+
+        </div>
+
+        <button type="submit" class="btn-primary btn-predict" id="predictBtn">
+          <div class="ld"></div>
+          <span class="btn-text">⚡ &nbsp;PREDICT TRAFFIC</span>
+        </button>
+      </form>
+    </div>
+
+    <!-- Result Card -->
+    <div class="card result-card" id="resultCard">
+
+      <!-- Idle state -->
+      <div class="idle" id="idleState">
+        <div class="idle-icon">🚦</div>
+        <p class="idle-text">Fill in the parameters<br>and click Predict</p>
+      </div>
+
+      <!-- Result (hidden initially) -->
+      <div id="resultContent" style="display:none; flex-direction:column; align-items:center; gap:1.2rem; width:100%;">
+
+        <!-- Traffic Light SVG -->
+        <svg width="62" height="155" viewBox="0 0 62 155" xmlns="http://www.w3.org/2000/svg">
+          <rect x="4" y="4" width="54" height="147" rx="13" class="tl-body"/>
+          <rect x="4" y="4" width="54" height="147" rx="13" class="tl-border"/>
+          <circle cx="31" cy="38"  r="19" class="tl-circle tl-r" id="tlR"/>
+          <circle cx="31" cy="78"  r="19" class="tl-circle tl-y" id="tlY"/>
+          <circle cx="31" cy="118" r="19" class="tl-circle tl-g" id="tlG"/>
+        </svg>
+
+        <div>
+          <div class="res-level" id="resLevel">—</div>
+          <div class="res-conf"  id="resConf">Confidence: —</div>
+        </div>
+
+        <!-- Probability bars -->
+        <div class="prob-block">
+          <div class="prob-row">
+            <div class="prob-label-row"><span>🟢 Low</span><span id="pLow">—</span></div>
+            <div class="bar-track"><div class="bar-fill bar-g" id="bLow"></div></div>
+          </div>
+          <div class="prob-row">
+            <div class="prob-label-row"><span>🟡 Medium</span><span id="pMed">—</span></div>
+            <div class="bar-track"><div class="bar-fill bar-a" id="bMed"></div></div>
+          </div>
+          <div class="prob-row" style="margin-bottom:0">
+            <div class="prob-label-row"><span>🔴 High</span><span id="pHigh">—</span></div>
+            <div class="bar-track"><div class="bar-fill bar-r" id="bHigh"></div></div>
+          </div>
+        </div>
+
+        <div class="rec-box" id="recBox"></div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- Map -->
+  <div class="map-section">
+    <div class="map-header">
+      <span class="map-title">📍 LOCATION MAP</span>
+      <span class="badge badge-cyan" id="mapLabel">New Delhi, India</span>
+    </div>
+    <div id="map"></div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+/* ── Toast (✅ FIXED: defined at top-level scope) ───────── */
+function showToast(msg, color) {
+  color = color || '#00d2ff';
+  const old = document.querySelector('.toast');
+  if (old) old.remove();
+
+  const t = document.createElement('div');
+  t.className = 'toast';
+  t.innerHTML = msg;
+  t.style.background = color;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 2600);
+}
+
+/* ── Time Slider ────────────────────────────────────────── */
+const slider  = document.getElementById('timeSlider');
+const timeVal = document.getElementById('timeVal');
+
+function fmtTime(h) {
+  const ampm = h < 12 ? 'AM' : 'PM';
+  const h12  = h % 12 === 0 ? 12 : h % 12;
+  return String(h).padStart(2,'0') + ':00 &nbsp;(' + h12 + ' ' + ampm + ')';
+}
+slider.addEventListener('input', function() {
+  timeVal.innerHTML = fmtTime(+slider.value);
+});
+
+/* ── Leaflet Map ────────────────────────────────────────── */
+var map = L.map('map', { zoomControl: true, scrollWheelZoom: false })
+           .setView([28.6139, 77.2090], 11);
+
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+  maxZoom: 18,
+}).addTo(map);
+
+function mkIcon(color) {
+  color = color || '#00d2ff';
+  return L.divIcon({
+    className: '',
+    html: '<div style="width:14px;height:14px;border-radius:50%;background:' + color +
+          ';border:3px solid #fff;box-shadow:0 0 14px ' + color + '80;"></div>',
+    iconSize: [14, 14], iconAnchor: [7, 7],
+  });
+}
+
+var marker = L.marker([28.6139, 77.2090], { icon: mkIcon() })
+              .addTo(map).bindPopup('<b>New Delhi</b>').openPopup();
+
+async function geocode(city) {
+  try {
+    const r = await fetch(
+      'https://nominatim.openstreetmap.org/search?format=json&q=' +
+      encodeURIComponent(city) + '&limit=1',
+      { headers: { 'Accept-Language': 'en' } }
+    );
+    const d = await r.json();
+    if (!d.length) { showToast('⚠️ City not found on map.', '#ffb700'); return; }
+    const lat = +d[0].lat, lon = +d[0].lon;
+    const short = d[0].display_name.split(',').slice(0,2).join(', ');
+    map.flyTo([lat, lon], 12, { duration: 1.2 });
+    if (marker) map.removeLayer(marker);
+    marker = L.marker([lat, lon], { icon: mkIcon() })
+              .addTo(map).bindPopup('<b>' + short + '</b>').openPopup();
+    document.getElementById('mapLabel').textContent = short;
+  } catch(err) {
+    console.warn('Geocode failed:', err);
+  }
+}
+
+/* ── Prediction ─────────────────────────────────────────── */
+var form = document.getElementById('predictForm');
+var btn  = document.getElementById('predictBtn');
+
+form.addEventListener('submit', async function(e) {
+  e.preventDefault();
+
+  const city = document.getElementById('cityInput').value.trim();
+  if (city) geocode(city);
+
+  btn.classList.add('loading');
+  btn.querySelector('.btn-text').textContent = 'Predicting…';
+
+  try {
+    // ✅ FIX: send FormData (matches request.form on backend)
+    const res  = await fetch('/predict', { method: 'POST', body: new FormData(form) });
+    const data = await res.json();
+
+    if (data.error) {
+      showToast('❌ ' + data.error, '#ff3366');
+      return;
+    }
+    renderResult(data);
+  } catch(err) {
+    showToast('❌ Connection error — make sure Flask is running.', '#ff3366');
+    console.error(err);
+  } finally {
+    btn.classList.remove('loading');
+    btn.querySelector('.btn-text').innerHTML = '⚡ &nbsp;PREDICT TRAFFIC';
+  }
+});
+
+/* ── Render result ──────────────────────────────────────── */
+function renderResult(d) {
+  var p  = d.prediction;
+  var pr = d.probabilities;
+
+  document.getElementById('idleState').style.display = 'none';
+  var rc = document.getElementById('resultContent');
+  rc.style.display = 'flex';
+
+  // Reset traffic lights
+  ['tlR','tlY','tlG'].forEach(function(id) {
+    document.getElementById(id).classList.remove('on');
+  });
+  var card = document.getElementById('resultCard');
+  card.className = 'card result-card';
+
+  var lvl = document.getElementById('resLevel');
+  if (p === 'High') {
+    document.getElementById('tlR').classList.add('on');
+    card.classList.add('res-high');
+    lvl.style.color = 'var(--red)';
+    lvl.textContent = '🔴  HIGH TRAFFIC';
+  } else if (p === 'Medium') {
+    document.getElementById('tlY').classList.add('on');
+    card.classList.add('res-medium');
+    lvl.style.color = 'var(--amber)';
+    lvl.textContent = '🟡  MEDIUM TRAFFIC';
+  } else {
+    document.getElementById('tlG').classList.add('on');
+    card.classList.add('res-low');
+    lvl.style.color = 'var(--green)';
+    lvl.textContent = '🟢  LOW TRAFFIC';
+  }
+
+  document.getElementById('resConf').textContent = 'Confidence: ' + d.confidence + '%';
+  document.getElementById('recBox').textContent  = d.recommendation;
+
+  // Animate probability bars
+  setTimeout(function() {
+    document.getElementById('bLow').style.width   = pr.Low    + '%';
+    document.getElementById('bMed').style.width   = pr.Medium + '%';
+    document.getElementById('bHigh').style.width  = pr.High   + '%';
+    document.getElementById('pLow').textContent   = pr.Low    + '%';
+    document.getElementById('pMed').textContent   = pr.Medium + '%';
+    document.getElementById('pHigh').textContent  = pr.High   + '%';
+  }, 80);
+}
+</script>
+{% endblock %}
