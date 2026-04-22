@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}Smart Traffic AI{% endblock %}</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚦</text></svg>">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  {% block head %}{% endblock %}
+</head>
+<body>
+
+<!-- ── Navbar ── -->
+<nav class="navbar">
+  <a href="/" class="nav-brand">
+    <div class="nav-pulse"></div>
+    TRAFFIC<em>AI</em>
+  </a>
+  <div class="nav-links">
+    <a href="/" class="nav-link {% if request.endpoint == 'index' %}active{% endif %}">
+      <span class="label">Predict</span>
+    </a>
+    <a href="/dashboard" class="nav-link {% if request.endpoint == 'dashboard' %}active{% endif %}">
+      <span class="label">Dashboard</span>
+    </a>
+    <a href="/about" class="nav-link {% if request.endpoint == 'about' %}active{% endif %}">
+      <span class="label">About</span>
+    </a>
+    <a href="https://github.com/yourusername/smart-traffic-ai"
+       target="_blank" class="nav-link nav-github">⭐ GitHub</a>
+  </div>
+</nav>
+
+<!-- ── Page Content ── -->
+{% block content %}{% endblock %}
+
+<!-- ── Footer ── -->
+<footer>
+  <div class="page-wrap">
+    Built with ❤️ by <strong style="color:var(--cyan)">Team TrafficPrediction</strong>
+    &nbsp;·&nbsp; 
+    &nbsp;·&nbsp; <a href="/about">Meet the team →</a>
+  </div>
+</footer>
+
+<!-- ── Toast container ── -->
+<div class="toast-container" id="toastContainer"></div>
+
+<script>
+function showToast(msg, color) {
+  const t = document.createElement('div');
+  t.className = 'toast';
+  if (color) t.style.borderColor = color;
+  t.innerHTML = msg;
+  document.getElementById('toastContainer').appendChild(t);
+  setTimeout(() => {
+    t.style.transition = 'opacity .3s';
+    t.style.opacity = '0';
+    setTimeout(() => t.remove(), 350);
+  }, 3500);
+}
+</script>
+
+{% block scripts %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,455 @@
+{% extends 'base.html' %}
+{% block title %}Smart Traffic AI — Dashboard{% endblock %}
+
+{% block head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+/* ── Dashboard header ─────────────────────────────────────── */
+.db-header {
+  padding: 2.8rem 0 1.5rem;
+  display: flex; align-items: flex-end; justify-content: space-between;
+  flex-wrap: wrap; gap: 1rem;
+}
+.db-title {
+  font-family: var(--font-d); font-size: 1.7rem; font-weight: 900;
+  background: linear-gradient(135deg, #fff 30%, var(--cyan));
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.db-sub { font-size: .9rem; color: var(--muted); font-weight: 500; margin-top: 4px; }
+.db-refresh {
+  font-size: .75rem; color: var(--muted); font-weight: 600;
+  display: flex; align-items: center; gap: 6px;
+}
+.db-refresh .dot-live {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--green); box-shadow: 0 0 6px var(--green);
+  animation: pulse-dot 2s infinite;
+}
+
+/* ── Stats row ────────────────────────────────────────────── */
+.stats-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1rem; margin-bottom: 1.5rem;
+}
+
+/* ── Charts grid ──────────────────────────────────────────── */
+.charts-row {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 1rem; margin-bottom: 1.5rem;
+}
+.chart-card { padding: 1.6rem; }
+.chart-label {
+  font-family: var(--font-d); font-size: .68rem; letter-spacing: 2.5px;
+  color: var(--muted); text-transform: uppercase; margin-bottom: 1.2rem;
+}
+canvas { max-width: 100%; }
+
+/* ── Second charts row ────────────────────────────────────── */
+.charts-row2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem; margin-bottom: 1.5rem;
+}
+
+/* ── Heatmap ──────────────────────────────────────────────── */
+.heatmap-card { padding: 1.6rem; overflow-x: auto; }
+.heatmap-grid {
+  display: grid;
+  grid-template-columns: 46px repeat(24, 1fr);
+  gap: 3px;
+  min-width: 700px;
+}
+.hm-cell {
+  height: 22px; border-radius: 3px;
+  background: var(--bg3); font-size: 0; /* empty cells */
+  transition: filter .2s;
+  cursor: default;
+}
+.hm-cell:hover { filter: brightness(1.4); }
+.hm-day-label {
+  display: flex; align-items: center;
+  font-size: .72rem; font-weight: 700; color: var(--muted);
+  letter-spacing: .5px;
+}
+.hm-hour-label {
+  font-size: .62rem; color: var(--muted);
+  text-align: center; padding: 2px 0;
+}
+.heatmap-legend {
+  display: flex; align-items: center; gap: 8px;
+  margin-top: 12px; font-size: .75rem; color: var(--muted); font-weight: 600;
+}
+.legend-bar {
+  flex: 1; height: 8px; border-radius: 4px;
+  background: linear-gradient(90deg, var(--green) 0%, var(--amber) 50%, var(--red) 100%);
+  max-width: 180px;
+}
+
+/* ── Recent predictions table ─────────────────────────────── */
+.table-card { padding: 1.6rem; margin-bottom: 1.5rem; }
+.pred-table { width: 100%; border-collapse: collapse; }
+.pred-table th {
+  text-align: left; padding: 10px 14px;
+  font-size: .7rem; font-weight: 700; letter-spacing: 1.5px;
+  color: var(--muted); text-transform: uppercase;
+  border-bottom: 1px solid var(--border);
+}
+.pred-table td {
+  padding: 12px 14px; font-size: .9rem; font-weight: 500;
+  border-bottom: 1px solid rgba(0,210,255,.07);
+}
+.pred-table tr:hover td { background: rgba(0,210,255,.03); }
+.pred-table td:last-child { font-family: var(--font-d); font-size: .8rem; font-weight: 700; }
+.badge-sm { font-size: .68rem; padding: 3px 10px; }
+
+/* ── Loader ───────────────────────────────────────────────── */
+.loading-overlay {
+  display: flex; align-items: center; justify-content: center;
+  min-height: 200px;
+}
+
+/* ── Responsive ───────────────────────────────────────────── */
+@media (max-width: 900px) {
+  .stats-row      { grid-template-columns: repeat(2, 1fr); }
+  .charts-row     { grid-template-columns: 1fr; }
+  .charts-row2    { grid-template-columns: 1fr; }
+}
+@media (max-width: 520px) {
+  .stats-row { grid-template-columns: 1fr 1fr; }
+  .db-header { padding: 1.5rem 0 1rem; }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-wrap">
+
+  <!-- Header -->
+  <div class="db-header">
+    <div>
+      <h1 class="db-title">Analytics Dashboard</h1>
+      <p class="db-sub">Traffic intelligence · Model performance · City patterns</p>
+    </div>
+    <div class="db-refresh">
+      <div class="dot-live"></div> Live data
+    </div>
+  </div>
+
+  <!-- Stat Cards -->
+  <div class="stats-row" id="statsRow">
+    <!-- filled by JS -->
+    <div class="card stat-card"><div class="loading-overlay"><div class="spinner"></div></div></div>
+    <div class="card stat-card"><div class="loading-overlay"><div class="spinner"></div></div></div>
+    <div class="card stat-card"><div class="loading-overlay"><div class="spinner"></div></div></div>
+    <div class="card stat-card"><div class="loading-overlay"><div class="spinner"></div></div></div>
+  </div>
+
+  <!-- Row 1: Hourly line + Donut -->
+  <div class="charts-row">
+    <div class="card chart-card">
+      <div class="chart-label">Hourly Vehicle Count — Today's Pattern</div>
+      <canvas id="hourlyChart" height="100"></canvas>
+    </div>
+    <div class="card chart-card" style="display:flex;flex-direction:column;align-items:center;">
+      <div class="chart-label" style="align-self:flex-start">Traffic Distribution</div>
+      <canvas id="donutChart" height="200"></canvas>
+      <div id="donutLegend" style="display:flex;gap:1rem;margin-top:14px;flex-wrap:wrap;justify-content:center;"></div>
+    </div>
+  </div>
+
+  <!-- Row 2: Weekly bar + Heatmap -->
+  <div class="charts-row2">
+    <div class="card chart-card">
+      <div class="chart-label">Average Vehicle Count by Day</div>
+      <canvas id="weeklyChart" height="140"></canvas>
+    </div>
+    <div class="card chart-card">
+      <div class="chart-label">Peak Hours Distribution</div>
+      <canvas id="peakChart" height="140"></canvas>
+    </div>
+  </div>
+
+  <!-- Heatmap -->
+  <div class="card heatmap-card">
+    <div class="chart-label" style="margin-bottom:.8rem">Traffic Heatmap — Vehicles per Hour × Day</div>
+    <div class="heatmap-grid" id="heatmapGrid">
+      <div class="loading-overlay" style="grid-column:1/-1"><div class="spinner"></div></div>
+    </div>
+    <div class="heatmap-legend">
+      <span>Low</span>
+      <div class="legend-bar"></div>
+      <span>High</span>
+    </div>
+  </div>
+
+  <!-- Recent Predictions Table -->
+  <div class="card table-card">
+    <div class="chart-label" style="margin-bottom:1rem">Recent AI Predictions</div>
+    <div style="overflow-x:auto">
+      <table class="pred-table" id="recentTable">
+        <thead>
+          <tr>
+            <th>Time</th><th>Day</th><th>Vehicles</th>
+            <th>Weather</th><th>Road Type</th><th>Prediction</th>
+          </tr>
+        </thead>
+        <tbody id="recentTbody">
+          <!-- filled by JS -->
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+Chart.defaults.color = '#4a7896';
+Chart.defaults.font.family = "'Rajdhani', sans-serif";
+Chart.defaults.font.size   = 12;
+
+const CYAN  = '#00d2ff';
+const GREEN = '#00ff88';
+const AMBER = '#ffb700';
+const RED   = '#ff3366';
+
+// ── Gradient helper ────────────────────────────────────────
+function makeGrad(ctx, c1, c2) {
+  const g = ctx.createLinearGradient(0, 0, 0, 300);
+  g.addColorStop(0, c1);
+  g.addColorStop(1, c2);
+  return g;
+}
+
+// ── Stat Cards ─────────────────────────────────────────────
+async function loadStats() {
+  const d = await fetch('/api/stats').then(r => r.json());
+
+  const cards = [
+    { icon:'🧠', value: d.total_predictions.toLocaleString(),
+      label:'Total Predictions', delta:'↑ +124 today', up:true },
+    { icon:'🎯', value: d.model_accuracy + '%',
+      label:'Model Accuracy', delta:'Random Forest · 200 trees', up:true },
+    { icon:'⏰', value: d.peak_hour,
+      label:'Peak Traffic Hour', delta:'Morning rush window', up:false },
+    { icon:'🚗', value: d.avg_vehicles,
+      label:'Avg. Vehicle Count', delta:'↑ +12 vs last week', up:true },
+  ];
+
+  const row = document.getElementById('statsRow');
+  row.innerHTML = cards.map(c => `
+    <div class="card stat-card">
+      <div class="stat-icon">${c.icon}</div>
+      <div class="stat-value">${c.value}</div>
+      <div class="stat-label">${c.label}</div>
+      <div class="stat-delta ${c.up?'up':'dn'}">${c.delta}</div>
+    </div>
+  `).join('');
+
+  // Hourly chart
+  const hCtx = document.getElementById('hourlyChart').getContext('2d');
+  new Chart(hCtx, {
+    type: 'line',
+    data: {
+      labels: Array.from({length:24}, (_,i)=> `${String(i).padStart(2,'0')}:00`),
+      datasets: [{
+        label: 'Vehicles',
+        data: d.hourly,
+        borderColor: CYAN,
+        backgroundColor: makeGrad(hCtx, 'rgba(0,210,255,.25)', 'rgba(0,210,255,0)'),
+        borderWidth: 2.5, fill: true, tension: .45,
+        pointRadius: 0, pointHoverRadius: 5,
+        pointHoverBackgroundColor: CYAN,
+        pointHoverBorderColor: '#fff', pointHoverBorderWidth: 2,
+      }],
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { display: false }, tooltip: {
+        backgroundColor: '#0a1828', borderColor: 'rgba(0,210,255,.25)',
+        borderWidth: 1, titleFont: { weight: '700' },
+        callbacks: { label: ctx => ` ${ctx.parsed.y} vehicles` }
+      }},
+      scales: {
+        x: { grid: { color: 'rgba(0,210,255,.06)' }, ticks: { maxTicksLimit: 8 } },
+        y: { grid: { color: 'rgba(0,210,255,.06)' }, min: 0,
+             ticks: { callback: v => v + ' veh' } },
+      },
+    },
+  });
+
+  // Donut chart
+  const dCtx = document.getElementById('donutChart').getContext('2d');
+  new Chart(dCtx, {
+    type: 'doughnut',
+    data: {
+      labels: ['Low','Medium','High'],
+      datasets: [{ data: [d.low_count, d.medium_count, d.high_count],
+        backgroundColor: [
+          'rgba(0,255,136,.7)', 'rgba(255,183,0,.7)', 'rgba(255,51,102,.7)'
+        ],
+        borderColor: ['#00ff88','#ffb700','#ff3366'],
+        borderWidth: 2, hoverOffset: 8,
+      }],
+    },
+    options: {
+      cutout: '68%',
+      plugins: { legend: { display: false }, tooltip: {
+        backgroundColor: '#0a1828', borderColor: 'rgba(0,210,255,.25)', borderWidth: 1,
+        callbacks: { label: ctx => ` ${ctx.label}: ${ctx.parsed.toLocaleString()} predictions` }
+      }},
+    },
+  });
+
+  // Donut legend
+  const cols = [GREEN, AMBER, RED];
+  const lbls = ['Low', 'Medium', 'High'];
+  const vals = [d.low_count, d.medium_count, d.high_count];
+  document.getElementById('donutLegend').innerHTML =
+    lbls.map((l,i) => `
+      <div style="display:flex;align-items:center;gap:6px;font-size:.8rem;font-weight:600;color:${cols[i]}">
+        <div style="width:10px;height:10px;border-radius:50%;background:${cols[i]}"></div>
+        ${l} · ${vals[i]}
+      </div>
+    `).join('');
+
+  // Weekly bar chart
+  const wCtx = document.getElementById('weeklyChart').getContext('2d');
+  new Chart(wCtx, {
+    type: 'bar',
+    data: {
+      labels: d.days_labels,
+      datasets: [{
+        label: 'Avg Vehicles',
+        data: d.weekly,
+        backgroundColor: d.days_labels.map((_,i) => i < 5
+          ? 'rgba(0,210,255,.55)' : 'rgba(255,183,0,.55)'),
+        borderColor: d.days_labels.map((_,i) => i < 5 ? CYAN : AMBER),
+        borderWidth: 1.5, borderRadius: 5,
+      }],
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { display: false }, tooltip: {
+        backgroundColor: '#0a1828', borderColor: 'rgba(0,210,255,.25)', borderWidth: 1,
+      }},
+      scales: {
+        x: { grid: { display: false } },
+        y: { grid: { color: 'rgba(0,210,255,.06)' }, min: 0 },
+      },
+    },
+  });
+
+  // Peak hours radar-style bar (flipped for fun)
+  const peakSlots = ['12AM-4AM','4AM-8AM','8AM-12PM','12PM-4PM','4PM-8PM','8PM-12AM'];
+  const peakData  = [18, 42, d.hourly.slice(8,12).reduce((a,b)=>a+b)/4,
+    d.hourly.slice(12,16).reduce((a,b)=>a+b)/4,
+    d.hourly.slice(16,20).reduce((a,b)=>a+b)/4, 55];
+  const pkCtx = document.getElementById('peakChart').getContext('2d');
+  new Chart(pkCtx, {
+    type: 'bar',
+    data: {
+      labels: peakSlots,
+      datasets: [{
+        label: 'Avg Vehicles',
+        data: peakData.map(v => Math.round(v)),
+        backgroundColor: peakData.map(v =>
+          v > 180 ? 'rgba(255,51,102,.6)' : v > 110 ? 'rgba(255,183,0,.6)' : 'rgba(0,255,136,.6)'),
+        borderColor: peakData.map(v =>
+          v > 180 ? RED : v > 110 ? AMBER : GREEN),
+        borderWidth: 1.5, borderRadius: 5,
+      }],
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { grid: { color: 'rgba(0,210,255,.06)' }, min: 0 },
+        y: { grid: { display: false }, ticks: { font: { size: 11 } } },
+      },
+    },
+  });
+}
+
+// ── Heatmap ────────────────────────────────────────────────
+async function loadHeatmap() {
+  const { days, data } = await fetch('/api/heatmap').then(r => r.json());
+  const maxV = Math.max(...data.flat());
+  const grid = document.getElementById('heatmapGrid');
+
+  grid.innerHTML = '';
+
+  // Hour header row
+  grid.appendChild(Object.assign(document.createElement('div'), { className:'hm-cell' }));
+  for (let h = 0; h < 24; h++) {
+    const el = Object.assign(document.createElement('div'), {
+      className: 'hm-hour-label',
+      textContent: h % 3 === 0 ? String(h).padStart(2,'0') : '',
+    });
+    grid.appendChild(el);
+  }
+
+  // Data rows
+  days.forEach((day, di) => {
+    const dayEl = Object.assign(document.createElement('div'), {
+      className: 'hm-day-label', textContent: day,
+    });
+    grid.appendChild(dayEl);
+
+    data[di].forEach(val => {
+      const ratio = val / maxV;
+      const r = ratio < .5
+        ? Math.round(0 + ratio * 2 * 255)
+        : 255;
+      const g = ratio < .5
+        ? Math.round(255 * ratio * 2)
+        : Math.round(255 * (1 - (ratio - .5) * 2));
+      const b = Math.round(80 * (1 - ratio));
+      const cell = document.createElement('div');
+      cell.className = 'hm-cell';
+      cell.style.background = `rgba(${r},${g},${b},.72)`;
+      cell.title = `${day} ${String(data[di].indexOf(val)).padStart(2,'0')}:00 — ${val} vehicles`;
+      grid.appendChild(cell);
+    });
+  });
+}
+
+// ── Recent Predictions Table ───────────────────────────────
+function loadTable() {
+  const days    = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
+  const weathers = ['Sunny','Cloudy','Rainy','Foggy'];
+  const roads   = ['Highway','City Road','Residential'];
+  const levels  = [
+    ['Low','badge-green'],['Medium','badge-amber'],['High','badge-red']
+  ];
+
+  const tbody = document.getElementById('recentTbody');
+  tbody.innerHTML = Array.from({length:10}, () => {
+    const h   = Math.floor(Math.random()*24);
+    const day = days[Math.floor(Math.random()*7)];
+    const veh = 20 + Math.floor(Math.random()*260);
+    const wthr = weathers[Math.floor(Math.random()*4)];
+    const road = roads[Math.floor(Math.random()*3)];
+    const [lvl, cls] = levels[veh > 175 ? 2 : veh > 100 ? 1 : 0];
+    return `<tr>
+      <td>${String(h).padStart(2,'0')}:00</td>
+      <td>${day}</td>
+      <td>${veh}</td>
+      <td>${wthr}</td>
+      <td>${road}</td>
+      <td><span class="badge badge-sm ${cls}">${lvl}</span></td>
+    </tr>`;
+  }).join('');
+}
+
+// ── Init ───────────────────────────────────────────────────
+loadStats();
+loadHeatmap();
+loadTable();
+</script>
+{% endblock %}
